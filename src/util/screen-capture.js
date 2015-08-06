@@ -31,6 +31,8 @@ module.exports = function() {
 					api._takeDarwin(cb)
 					break;
 				case 'linux':
+					api._takeLinux(cb)
+					break;
 				case 'win32':
 				default:
 					break;
@@ -38,7 +40,15 @@ module.exports = function() {
 		},
 
 		_takeDarwin: function(cb) {
-			var child = exec('screencapture -ic', function(err) {
+			api._takeScreenshot('screencapture -ic', cb)
+		},
+
+		_takeLinux: function(cb) {
+			api._takeScreenshot('gnome-screenshot -ac', cb)
+		},
+
+		_takeScreenshot: function(cmd, cb) {
+			var child = exec(cmd, function(err) {
 				if (err) {
 					return cb(err)
 				}
