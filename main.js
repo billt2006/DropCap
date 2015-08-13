@@ -29,6 +29,7 @@ var mb = menubar({
 	frame:       false,
 	resizable:   false,
 	show: true,
+	type: 'utility',
 	'always-on-top': true,
 	index:       'file://' + __dirname + '/index.html',
 	'web-preferences': {
