@@ -26,6 +26,8 @@ var Dropbox       = require('../util/dropbox')()
 var ScreenCapture = require('../util/screen-capture')()
 var clipboard     = require('clipboard')
 var shell         = require('shell')
+var settings      = require('./settings')
+var ipc           = require('ipc')
 
 var fetchSubject = new Rx.Subject()
 var shareSubject = new Rx.Subject()
@@ -36,6 +38,11 @@ exports.fetch = function(token) {
 }
 
 var captured = uiIntents.get('capture')
+	// Hide the window
+	.do(function() {
+		ipc.send('hide-window')
+	})
+
 	// Take a screen capture
 	.flatMap(function() {
 		return Rx.Observable.onErrorResumeNext(
@@ -43,20 +50,33 @@ var captured = uiIntents.get('capture')
 		)
 	})
 
+	// Show the window once the screen capture has been taken
+	.do(function() {
+		ipc.send('show-window')
+	})
+
 	// Upload the file data
-	.flatMap(function(data) {
+	.flatMap(function(imageData) {
 
 		var time = (new Date()).getTime()
 		var name = 'capture_' + time + '.png'
+		var img = imageData.toPng()
 
-		return Rx.Observable.fromNodeCallback(Dropbox.uploadFile)(name, data)
+		return Rx.Observable.fromNodeCallback(Dropbox.uploadFile, undefined, function(body) {
+			return {
+				meta: body,
+				file: imageData
+			}
+		})(name, img)
 	})
 
 	// Map file data and metadata to an object for consumption. Yum!
 	.map(function(n) {
 
-		// Trigger sharing
-		shareSubject.onNext(n.meta.path)
+		// Trigger sharing if enabled
+		if (settings.get('autoShare')) {
+			shareSubject.onNext(n.meta.path)
+		}
 
 		return {
 			data: n.file.toDataUrl(),
@@ -85,7 +105,7 @@ var preview = uiIntents.get('preview')
 exports.photoStream = fetchSubject
 	// Get sequence of files from root directory metadata
 	.flatMap(function() {
-		return Rx.Observable.fromCallback(Dropbox.getMetaData)()
+		return Rx.Observable.fromNodeCallback(Dropbox.getMetaData)()
 	})
 
 	// Convert the resulting array of files to a sequence
@@ -95,7 +115,7 @@ exports.photoStream = fetchSubject
 
 	// Get file data for each file
 	.flatMap(function(n) {
-		return Rx.Observable.fromCallback(Dropbox.getFile)(n.path)
+		return Rx.Observable.fromNodeCallback(Dropbox.getFile)(n.path)
 	})
 
 	// Get base64 string and metadata for photo
@@ -115,7 +135,7 @@ exports.deleteStream =
 
 	// Send delete to Dropbox
 	.flatMap(function(d) {
-		return Rx.Observable.fromCallback(Dropbox.deleteFile)(d.data.path)
+		return Rx.Observable.fromNodeCallback(Dropbox.deleteFile)(d.data.path)
 	})
 	.subscribe(function(n) {
 		console.log('Deleted:', n)

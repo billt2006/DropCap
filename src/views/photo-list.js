@@ -22,11 +22,15 @@ var React            = require('react/addons')
 var Photo            = require('../components/photo')
 var photoStream      = require('../stores/photos').photoStream
 var deleteStream     = require('../stores/photos').deleteStream
+var settings         = require('../stores/settings')
 var StateStreamMixin = require('rx-react').StateStreamMixin
 var uiIntents        = require('../intents/ui')
+var moment           = require('moment')
 
 var h = React.createElement
 var ReactCSSTransitionGroup = React.addons.CSSTransitionGroup
+
+var photosCache = []
 
 module.exports = React.createClass({
 
@@ -41,14 +45,23 @@ module.exports = React.createClass({
 	},
 
 	componentWillMount: function() {
-		require('../stores/photos').fetch(this.props.token)
+		if (!photosCache.length) {
+			require('../stores/photos').fetch(this.props.token)
+		} else {
+			this.setState({
+				photos: photosCache
+			})
+		}
 	},
 
 	getStateStream: function() {
 		return photoStream
-			.scan([], function(acc, p) {
+
+			// Build array from stream
+			.scan(function(acc, p) {
 				return acc.concat(p)
-			})
+			}, photosCache)
+
 			// Strip out any photos that have been deleted
 			.combineLatest(
 				uiIntents.get('deletePhoto').map(function(n) { return n.data }).startWith(null),
@@ -79,6 +92,8 @@ module.exports = React.createClass({
 				})
 			})
 			.map(function(photos) {
+				photosCache = photos
+
 				return {
 					photos: photos
 				}
@@ -88,13 +103,47 @@ module.exports = React.createClass({
 	render: function() {
 
 		var photos = this.state.photos.map(function(p, i) {
-			return h(Photo, { key: p.meta.rev, src: p.data, meta: p.meta })
+			var date = new Date(p.meta.modified)
+
+			return h(Photo, {
+				key: p.meta.rev,
+				src: p.data,
+				meta: p.meta,
+				date: settings.get('relativeTime') ? moment(date).fromNow() : date.toDateString()
+			})
 		})
+
+		var styles = {
+
+			emptyContainer: {
+				textAlign: 'center',
+				marginTop:  20,
+				fontSize:   14,
+				color:      '#a8a198',
+				padding:    '0 50px'
+			}
+
+		}
+
+		var empty = this.state.photos.length > 0 ? null : (
+			h('div', {
+					style: styles.emptyContainer
+				}, [
+					h('img', {
+						src: 'img/icon-arrow-up.svg',
+						width: 16,
+						height: 16
+					}),
+					h('p', null, 'Looks like you don’t have any saved captures.'),
+					h('p', null, ['Use the button above', h('br'), 'to get started'])
+				])
+		)
 
 		return (
 			h('div', {
 				style: this.props.style
 			}, [
+				empty,
 				h(ReactCSSTransitionGroup, { transitionName: 'photo' }, photos)
 			])
 		)

@@ -5,15 +5,16 @@
   "main": "main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "./node_modules/.bin/electron-packager . DropCap --platform=darwin --arch=x64 --version=0.30.2 --out=./release --asar --icon=icon.icns --overwrite"
+    "build": "/bin/bash ./bin/icon && /bin/bash ./bin/build"
   },
   "author": "David Street",
   "license": "GPLv3",
   "dependencies": {
     "extend": "^3.0.0",
     "menubar": "^2.0.14",
+    "moment": "^2.10.6",
     "react": "^0.13.3",
-    "rx": "^2.5.3",
+    "rx": "^3.0.0",
     "rx-react": "^0.2.0",
     "snabbdom": "^0.2.1"
   },

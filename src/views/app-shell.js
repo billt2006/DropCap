@@ -19,13 +19,26 @@
  */
 
 var React            = require('react/addons')
+var Rx               = require('rx')
 var Header           = require('../components/header')
 var PhotoList        = require('./photo-list')
+var PhotoHeader      = require('./photo-header')
+var SettingsHeader   = require('./settings-header')
+var Settings         = require('./settings')
 var Authorize        = require('./authorize')
 var User             = require('../stores/user')
 var StateStreamMixin = require('rx-react').StateStreamMixin
+var uiIntents        = require('../intents/ui')
+var navIntents       = require('../intents/navigation')
 
 var h = React.createElement
+var ReactCSSTransitionGroup = React.addons.CSSTransitionGroup
+
+var navMap = {
+	'photos':   [PhotoHeader, PhotoList],
+	'settings': [SettingsHeader, Settings],
+	'auth':     [PhotoHeader, Authorize]
+}
 
 module.exports = React.createClass({
 
@@ -33,21 +46,25 @@ module.exports = React.createClass({
 
 	mixins: [StateStreamMixin],
 
-	getInitalState: function() {
-		return {
-			token: null,
-			authorized: false
-		}
-	},
-
 	getStateStream: function() {
-		return User.authorize
-			.map(function(token) {
-				return {
-					token: token,
-					authorized: token ? true : false
+		return navIntents.stream.startWith('photos')
+			.combineLatest(
+				User.authorize,
+				function(nav, token) {
+					if (!token) {
+						nav = 'auth'
+					}
+
+					return {
+						token: token,
+						authorized: token ? true : false,
+						headerView: navMap[nav][0],
+						contentView: navMap[nav][1],
+						headerKey: nav + '-header',
+						contentKey: nav + '-content'
+					}
 				}
-			})
+			)
 	},
 
 	render: function() {
@@ -64,9 +81,10 @@ module.exports = React.createClass({
 			overflow:     'hidden'
 		}
 
-		var photosStyle = {
+		var contentStyle = {
 			height:       390,
-			overflowY:    'scroll'
+			overflowY:    'scroll',
+			position:     'relative'
 		}
 
 		var pointStyle = {
@@ -76,17 +94,38 @@ module.exports = React.createClass({
 			marginLeft:   -10
 		}
 
-		var contentView = this.state.authorized ? h(PhotoList, { style: photosStyle, token: this.state.token }) : h(Authorize)
+		var headerStyle = {
+			height:       60,
+			background:   'rgba(47, 208, 158, 0.9)',
+			textAlign:    'center',
+			position:     'relative'
+		}
 
 		return (
 			h('div', {
 				style: style
 			}, [
-				h('img', { src: 'img/point.svg', width: 20, height: 10, style: pointStyle }),
+				h('img', {
+					src: 'img/point.svg',
+					width: 20,
+					height: 10,
+					style: pointStyle
+				}),
 
-				h(Header),
+				h('div', {
+					style: headerStyle
+				}, h(ReactCSSTransitionGroup, {
+					transitionName: 'header',
+					component: 'div',
+					style: { position: 'relative' }
+				}, h(this.state.headerView, { key: this.state.headerKey }))),
 
-				h(PhotoList, { style: photosStyle, token: this.state.token })
+				h('div', {
+					style: contentStyle
+				}, h(ReactCSSTransitionGroup, {
+					transitionName: 'content',
+					component: 'div'
+				}, h(this.state.contentView, { token: this.state.token, key: this.state.contentKey })))
 
 			])
 		)

@@ -101,7 +101,11 @@ module.exports = function() {
 			}
 
 			api._sendRequest(opts, 'utf8', null, function(err, res) {
-				cb(JSON.parse(res.body))
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, JSON.parse(res.body))
 			})
 		},
 
@@ -122,7 +126,11 @@ module.exports = function() {
 			}
 
 			api._sendRequest(opts, 'binary', null, function(err, res) {
-				cb({
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, {
 					meta: JSON.parse(res.headers['x-dropbox-metadata']),
 					data: res.body
 				})
@@ -153,7 +161,11 @@ module.exports = function() {
 			}
 
 			api._sendRequest(opts, 'utf8', data, function(err, res) {
-				cb(JSON.parse(res.body))
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, JSON.parse(res.body))
 			})
 		},
 
@@ -175,11 +187,12 @@ module.exports = function() {
 				}
 			}
 
-			api._sendRequest(opts, 'utf8', file.toPng(), function(err, res) {
-				cb(err, {
-					file: file,
-					meta: JSON.parse(res.body)
-				})
+			api._sendRequest(opts, 'utf8', file, function(err, res) {
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, JSON.parse(res.body))
 			})
 		},
 
@@ -220,12 +233,16 @@ module.exports = function() {
 			win.loadUrl(url)
 			win.show()
 
+			win.webContents.on('crashed', function(e, code, desc) {
+				cb(new Error('Render process crashed'))
+			})
+
 			win.webContents.on('did-get-redirect-request', function(e, oldUrl, newUrl) {
 				var url = newUrl.replace(config.auth.redirectUri + '/#', '')
 				var resObj = querystring.parse(url)
 
 				cb(null, resObj)
-				win.close()
+				win.destroy()
 			}.bind(this))
 		}
 
