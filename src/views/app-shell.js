@@ -83,7 +83,8 @@ module.exports = React.createClass({
 
 		var contentStyle = {
 			height:       390,
-			overflowY:    'scroll',
+			overflowX:    'hidden',
+			overflowY:    'auto',
 			position:     'relative'
 		}
 
