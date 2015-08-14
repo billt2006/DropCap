@@ -28,6 +28,7 @@ var mb = menubar({
 	transparent: true,
 	frame:       false,
 	resizable:   false,
+	icon:        'IconTemplate.png',
 	show: true,
 	type: 'utility',
 	'always-on-top': true,
