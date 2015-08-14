@@ -39,6 +39,11 @@ var mb = menubar({
 
 mb.app.commandLine.appendSwitch('enable-experimental-web-platform-features')
 
+if (process.platform == 'linux') {
+	mb.app.commandLine.appendSwitch('enable-transparent-visuals')
+	mb.app.commandLine.appendSwitch('disable-gpu')
+}
+
 mb.app.on('window-all-closed', function() {
 	mb.app.quit()
 })
