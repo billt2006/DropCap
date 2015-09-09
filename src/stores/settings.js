@@ -18,15 +18,59 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var extend = require('extend')
+var Rx        = require('rx')
+var extend    = require('extend')
+var ipc       = require('ipc')
+var uiIntents = require('../intents/ui')
 
 var DEFAULTS = {
-	relativeTime: true,
-	autoShare:    true,
-	launch:       false
+	relativeTime:    true,
+	autoShare:       true,
+	launch:          false,
+	shortcutOpen:    'Ctrl+Alt+C',
+	shortcutCapture: 'Shift+Cmd+5'
 }
 
+var subject = new Rx.Subject()
 var cache = {}
+
+ipc.on('shortcut-open', function() {
+	ipc.send('show-window')
+})
+
+var settingsStream = subject
+	.do(function(s) {
+		cache[s.item] = s.value
+		localStorage.setItem('settings', JSON.stringify(cache))
+	})
+
+settingsStream
+	.filter(function(s) {
+		return s.item == 'launch'
+	})
+	.subscribe(function(s) {
+		if (s.value) {
+			ipc.send('enable-startup')
+		} else {
+			ipc.send('disable-startup')
+		}
+	})
+
+settingsStream
+	.filter(function(s) {
+		return s.item == 'shortcutOpen'
+	})
+	.subscribe(function(s) {
+		ipc.send('register-shortcut', 'shortcutOpen', s.value, 'shortcut-open')
+	})
+
+settingsStream
+	.filter(function(s) {
+		return s.item == 'shortcutCapture'
+	})
+	.subscribe(function(s) {
+		ipc.send('register-shortcut', 'shortcutCapture', s.value, 'shortcut-capture')
+	})
 
 module.exports = {
 
@@ -41,6 +85,13 @@ module.exports = {
 
 		if (!keyVal) {
 			localStorage.setItem('settings', JSON.stringify(cache))
+		}
+
+		for (key in cache) {
+			this.set({
+				item: key,
+				value: cache[key]
+			})
 		}
 	},
 
@@ -77,12 +128,8 @@ module.exports = {
 	 * Set a single property in the settings cache, and persist
 	 * to localStorage
 	 * 
-	 * @param {String} item 
-	 * @param {*} val  
+	 * @param {Object} item
 	 */
-	set: function(item, val) {
-		cache[item] = val
-		localStorage.setItem('settings', JSON.stringify(cache))
-	}
+	set: function(obj) { subject.onNext(obj) }
 
 }

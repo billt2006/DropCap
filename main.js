@@ -18,25 +18,32 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-var ipc     = require('ipc')
-var menubar = require('menubar')
+var ipc      = require('ipc')
+var menubar  = require('menubar')
+var shortcut = require('global-shortcut')
+var fs       = require('fs')
+var path     = require('path')
+var startup  = require('./lib/startup')
 
-var mainWindow = null
 var mb = menubar({
-	width:       320,
-	height:      470,
-	transparent: true,
-	frame:       false,
-	resizable:   false,
-	icon:        'IconTemplate.png',
-	show: true,
-	type: 'utility',
-	'always-on-top': true,
-	index:       'file://' + __dirname + '/index.html',
-	'web-preferences': {
-		'experimental-features': true
-	}
+	width:                    320,
+	height:                   470,
+	transparent:              true,
+	frame:                    false,
+	resizable:                false,
+	icon:                     __dirname + '/IconTemplate.png',
+	show:                     false,
+	preloadWindow:            true,
+	'show-on-all-workspaces': true,
+	type:                     'utility',
+	'always-on-top':          process.env.NODE_ENV == 'development' ? true : false,
+	index:                    'file://' + __dirname + '/index.html',
+	'web-preferences':        { 'experimental-features': true }
 })
+
+var settings = { shortcuts: {} }
+var wc = null
+var settingsFile = path.join(mb.app.getPath('userData'), 'settings.json')
 
 mb.app.commandLine.appendSwitch('enable-experimental-web-platform-features')
 
@@ -45,8 +52,28 @@ if (process.platform == 'linux') {
 	mb.app.commandLine.appendSwitch('disable-gpu')
 }
 
+mb.app.on('ready', function() {
+	console.log('Loading settings from', settingsFile)
+
+	wc = mb.window.webContents
+
+	fs.readFile(settingsFile, { encoding: 'utf8' }, function(err, data) {
+		if (err) {
+			return console.error('Failed to read settings file')
+		}
+
+		settings = JSON.parse(data)
+		initShortcuts()
+	})
+})
+
 mb.app.on('window-all-closed', function() {
 	mb.app.quit()
+})
+
+mb.app.on('will-quit', function() {
+	shortcut.unregisterAll()
+	writeSettings()
 })
 
 mb.on('show', function() {
@@ -59,6 +86,57 @@ ipc.on('hide-window', function() {
 	mb.window.hide()
 })
 
-ipc.on('show-window', function() {
+ipc.on('show-window', function(e) {
 	mb.window.show()
 })
+
+ipc.on('enable-startup', function() {
+	startup(mb.app).enable()
+})
+
+ipc.on('disable-startup', function() {
+	startup(mb.app).disable()
+})
+
+ipc.on('register-shortcut', function(e, cacheKey, accel, message) {
+
+	console.log('registering shortcut', accel, 'to send message:', message)
+
+	if (settings.shortcuts.hasOwnProperty(cacheKey)) {
+		shortcut.unregister(settings.shortcuts[cacheKey].accelerator)
+	}
+
+	settings.shortcuts[cacheKey] = {
+		accelerator: accel,
+		message: message
+	}
+
+	shortcut.register(accel, triggerShortcut(message))
+	writeSettings()
+})
+
+ipc.on('quit-app', function() {
+	mb.app.quit()
+})
+
+function initShortcuts() {
+	var shortcuts = settings.shortcuts
+
+	for (var s in shortcuts) {
+		if (!shortcuts.hasOwnProperty(s)) {
+			continue
+		}
+
+		shortcut.register(shortcuts[s].accelerator, triggerShortcut(shortcuts[s].message))
+	}
+}
+
+function triggerShortcut(message) {
+	return function() {
+		wc.send(message)
+	}
+}
+
+function writeSettings() {
+	fs.writeFileSync(settingsFile, JSON.stringify(settings))
+}

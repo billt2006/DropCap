@@ -25,6 +25,7 @@ var BrowserWindow = remote.require('browser-window');
 var config        = remote.require('./config').dropbox
 
 var token = null
+var cursor = null
 
 module.exports = function() {
 
@@ -110,6 +111,58 @@ module.exports = function() {
 		},
 
 		/**
+		 * Get a list of all changes in the directory
+		 * 
+		 * @param  {Function} cb
+		 */
+		getDelta: function(cb) {
+			var data = cursor ? querystring.stringify({ cursor: cursor }) : null
+
+			var opts = {
+				hostname: 'api.dropbox.com',
+				path: '/1/delta',
+				method: 'POST',
+				headers: {
+					'Authorization': 'Bearer ' + token,
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'Content-Length': data ? data.length : 0
+				}
+			}
+
+			api._sendRequest(opts, 'utf8', data, function(err, res) {
+				if (err) {
+					return cb(err)
+				}
+
+				var body = JSON.parse(res.body)
+
+				cursor = body.cursor
+				cb(null, body)
+			})
+		},
+
+		/**
+		 * Start a long polling request to listen for changes to the directory
+		 * 
+		 * @param  {Function} cb
+		 */
+		doPoll: function(cb) {
+			var opts = {
+				hostname: 'api-notify.dropbox.com',
+				path: '/1/longpoll_delta?cursor=' + cursor,
+				method: 'GET'
+			}
+
+			api._sendRequest(opts, 'utf8', null, function(err, res) {
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, JSON.parse(res.body))
+			})
+		},
+
+		/**
 		 * Get the binary data and metadata of a particular file
 		 *
 		 * @param  {String}   path
@@ -119,6 +172,39 @@ module.exports = function() {
 			var opts = {
 				hostname: 'api-content.dropbox.com',
 				path: '/1/files/auto' + path ,
+				method: 'GET',
+				headers: {
+					'Authorization': 'Bearer ' + token
+				}
+			}
+
+			api._sendRequest(opts, 'binary', null, function(err, res) {
+				if (err) {
+					return cb(err)
+				}
+
+				cb(null, {
+					meta: JSON.parse(res.headers['x-dropbox-metadata']),
+					data: res.body
+				})
+			})
+		},
+
+		/**
+		 * Get the thumbnail of a file
+		 * 
+		 * @param  {String}   path
+		 * @param  {Function} cb
+		 */
+		getThumbnail: function(path, cb) {
+			var params = querystring.stringify({
+				format: 'png',
+				size: 'm'
+			})
+
+			var opts = {
+				hostname: 'api-content.dropbox.com',
+				path: '/1/thumbnails/auto' + path + '?' + params,
 				method: 'GET',
 				headers: {
 					'Authorization': 'Bearer ' + token
