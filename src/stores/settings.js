@@ -28,7 +28,7 @@ var DEFAULTS = {
 	autoShare:       true,
 	launch:          false,
 	shortcutOpen:    'Ctrl+Alt+C',
-	shortcutCapture: 'Shift+Cmd+5'
+	shortcutCapture: process.platform == 'darwin' ? 'Shift+Cmd+5' : 'Shift+Ctrl+5'
 }
 
 var subject = new Rx.Subject()
